@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="de" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Visueller Timer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --timer-bg: #374151; /* gray-700 */
+            --timer-sector: #ef4444; 
+            --timer-marker: #9ca3af;
+            --timer-text: #e5e7eb;
+            --special-blue: #8DB6CD;
+        }
+        /* Stellt sicher, dass die App die volle Höhe nutzt und nicht scrollt */
+        html, body {
+            height: 100%;
+            overflow: hidden;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            touch-action: none;
+            background-color: #111827; /* gray-900 */
+            color: #e5e7eb; /* Standardmässig heller Text */
+        }
+        .timer-canvas {
+            cursor: pointer;
+            border-radius: 50%;
+            -webkit-tap-highlight-color: transparent;
+        }
+        *:focus-visible {
+            outline: 3px solid #60a5fa !important;
+            outline-offset: 2px;
+            border-radius: 0.5rem;
+        }
+        button:focus-visible {
+             border-radius: 9999px;
+        }
+        .color-palette {
+            display: none;
+            position: absolute;
+            top: 3.5rem;
+            right: 0;
+            background-color: #4b5563; /* gray-600 */
+            border-radius: 0.75rem;
+            padding: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+            z-index: 20;
+        }
+        .color-palette.is-open {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.5rem;
+        }
+        
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+        }
+        .toggle-switch {
+            width: 52px;
+            height: 32px;
+            background-color: #4b5563; /* grauer Hintergrund */
+            border-radius: 9999px;
+            position: relative;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+        }
+        .toggle-switch-handle {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 24px;
+            height: 24px;
+            background-color: white;
+            border-radius: 50%;
+            transition: transform 0.2s ease-in-out;
+        }
+        .toggle-switch.is-active {
+            background-color: #3b82f6; /* blauer Hintergrund */
+        }
+        .toggle-switch.is-active .toggle-switch-handle {
+            transform: translateX(20px);
+        }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center p-4">
+
+    <!-- Container mit angepasster Höhe für Handy-Optik -->
+    <div class="w-full max-w-md mx-auto bg-gray-800 rounded-2xl shadow-2xl p-6 relative flex flex-col h-[740px] max-h-[95vh]">
+        
+        <!-- Header für Icons -->
+        <div class="flex justify-between items-center h-10">
+             <!-- Button für Einstellungen (links) -->
+            <button id="settings-btn" aria-label="Einstellungen öffnen" class="text-gray-400 hover:text-white w-10 h-10 flex items-center justify-center rounded-full">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+            </button>
+             <!-- Button für Farbauswahl (rechts) -->
+             <div class="relative">
+                <button id="color-picker-btn" aria-label="Timer-Farbe wählen" class="w-10 h-10 flex items-center justify-center rounded-full bg-gray-700">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" viewBox="0 0 24 24">
+                        <circle cx="12" cy="3.5" r="2.8" fill="#ef4444"/>
+                        <circle cx="19.36" cy="7.75" r="2.8" fill="#f4a261"/>
+                        <circle cx="19.36" cy="16.25" r="2.8" fill="#eab308"/>
+                        <circle cx="12" cy="20.5" r="2.8" fill="#a7c957"/>
+                        <circle cx="4.64" cy="16.25" r="2.8" fill="#60a5fa"/>
+                        <circle cx="4.64" cy="7.75" r="2.8" fill="#c4b5fd"/>
+                    </svg>
+                </button>
+                <div id="color-palette" class="color-palette"></div>
+            </div>
+        </div>
+        
+        <!-- Timer-Wrapper füllt den verfügbaren Platz -->
+        <div id="timer-wrapper" role="timer" aria-live="polite" class="relative w-full aspect-square my-auto">
+            <canvas id="timerCanvas" class="timer-canvas w-full h-full"></canvas>
+        </div>
+
+        <!-- Steuerelemente am unteren Rand -->
+        <div class="flex flex-col space-y-4 mt-auto">
+            <div class="flex items-center space-x-4">
+                <label for="manualTime" class="text-lg font-medium">Zeit:</label>
+                <input type="number" id="manualTime" min="0" max="60" placeholder="Min" class="w-full px-4 py-2 text-lg bg-gray-700 border-2 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+            </div>
+
+            <div class="grid grid-cols-2 gap-4">
+                <button id="startPauseBtn" class="w-full py-3 text-xl font-bold text-white rounded-lg transition-colors disabled:bg-gray-600 focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">Start</button>
+                <button id="resetBtn" class="w-full py-3 text-xl font-bold bg-gray-600 text-gray-200 rounded-lg hover:bg-gray-500 focus:ring-2 focus:ring-offset-2 focus:ring-gray-400">Reset</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Einstellungs-Modal -->
+    <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay hidden">
+        <div class="w-full max-w-sm bg-gray-800 rounded-2xl shadow-2xl p-6 flex flex-col">
+            <h3 class="text-2xl font-bold mb-8 text-center">Einstellungen</h3>
+            <div class="space-y-6 flex-grow mb-8">
+                <div class="flex justify-between items-center">
+                    <span class="text-lg">Signalton</span>
+                    <div id="sound-toggle" class="toggle-switch">
+                        <div class="toggle-switch-handle"></div>
+                    </div>
+                </div>
+                <div class="flex justify-between items-center">
+                    <span class="text-lg">Vibration</span>
+                    <div id="vibration-toggle" class="toggle-switch">
+                        <div class="toggle-switch-handle"></div>
+                    </div>
+                </div>
+            </div>
+            <button id="close-settings-btn" class="w-full py-3 text-lg font-bold bg-gray-600 hover:bg-gray-500 rounded-lg">Fertig</button>
+        </div>
+    </div>
+
+
+    <script type="module">
+        // --- KONSTANTEN & KONFIGURATION ---
+        const TAU = 2 * Math.PI;
+        const RED_COLOR = '#ef4444';
+        const SPECIAL_BLUE = '#8DB6CD';
+        const CONFIG = {
+            MAX_MINUTES: 60,
+            END_VIBRATION_PATTERN: [150, 100, 150, 100, 150],
+            COLORS: [RED_COLOR, '#f4a261', '#eab308', '#a7c957', '#60a5fa', '#c4b5fd', '#f9a8d4'],
+        };
+
+        // --- DOM-ELEMENTE ---
+        const ui = {
+            canvas: document.getElementById('timerCanvas'),
+            manualTimeInput: document.getElementById('manualTime'),
+            startPauseBtn: document.getElementById('startPauseBtn'),
+            resetBtn: document.getElementById('resetBtn'),
+            color: {
+                pickerBtn: document.getElementById('color-picker-btn'),
+                palette: document.getElementById('color-palette'),
+            },
+            settings: {
+                modal: document.getElementById('settings-modal'),
+                openBtn: document.getElementById('settings-btn'),
+                closeBtn: document.getElementById('close-settings-btn'),
+                soundToggle: document.getElementById('sound-toggle'),
+                vibrationToggle: document.getElementById('vibration-toggle'),
+            }
+        };
+        const ctx = ui.canvas.getContext('2d');
+
+        // --- ZUSTANDSVERWALTUNG (STATE) ---
+        let timerState = { status: 'paused', totalMs: 0, startTimestamp: 0, elapsedMsBeforePause: 0 };
+        let appState = {
+            settings: {
+                sound: true,
+                vibration: true
+            }
+        };
+        let tickTimeout = null;
+        let wakeLock = null;
+        let isPointerDown = false;
+        let completionMessage = null;
+
+        // --- KERNLOGIK: TIMER & SCHEDULER ---
+        function getRemainingMs() { return Math.max(0, timerState.totalMs - (timerState.status === 'running' ? (timerState.elapsedMsBeforePause + (Date.now() - timerState.startTimestamp)) : timerState.elapsedMsBeforePause)); }
+        function scheduleNextTick() { clearTimeout(tickTimeout); if (timerState.status !== 'running') return; const r = getRemainingMs(); if (r <= 0) { finish(); return; } tickTimeout = setTimeout(tick, (r % 1000) || 1000); }
+        function tick() { updateUI(); scheduleNextTick(); }
+        function start() { if (timerState.totalMs <= timerState.elapsedMsBeforePause) return; timerState.status = 'running'; timerState.startTimestamp = Date.now(); tick(); updateUI(); requestWakeLock(); }
+        function pause() { timerState.elapsedMsBeforePause += Date.now() - timerState.startTimestamp; timerState.status = 'paused'; clearTimeout(tickTimeout); updateUI(); releaseWakeLock(); }
+        
+        function reset() {
+            completionMessage = null;
+            timerState = { status: 'paused', totalMs: 0, startTimestamp: 0, elapsedMsBeforePause: 0 };
+            clearTimeout(tickTimeout);
+            ui.manualTimeInput.value = '';
+            updateUI();
+            releaseWakeLock();
+            setSectorColor(RED_COLOR);
+        }
+
+        function finish() {
+            const finishedAt = new Date();
+            const initialMinutes = Math.round(timerState.totalMs / 60000);
+            const hours = String(finishedAt.getHours()).padStart(2, '0');
+            const minutes = String(finishedAt.getMinutes()).padStart(2, '0');
+            completionMessage = [`${initialMinutes} Min. Timer`, `abgelaufen um ${hours}:${minutes}`];
+
+            timerState.status = 'finished';
+            timerState.elapsedMsBeforePause = timerState.totalMs;
+            clearTimeout(tickTimeout);
+            triggerNotifications();
+            releaseWakeLock();
+            updateUI();
+        }
+
+        function setDuration(minutes) {
+            if (completionMessage) {
+                completionMessage = null;
+            }
+            if (timerState.status === 'running') return;
+            const clampedMinutes = Math.max(0, Math.min(CONFIG.MAX_MINUTES, minutes));
+            timerState.totalMs = clampedMinutes * 60 * 1000;
+            timerState.elapsedMsBeforePause = 0;
+            timerState.status = 'paused';
+            ui.manualTimeInput.value = String(clampedMinutes || '');
+            updateUI();
+        }
+
+        // --- ZEICHNEN (CANVAS) ---
+        function resizeCanvas() { const dpr = window.devicePixelRatio || 1; const s = ui.canvas.clientWidth; ui.canvas.width = s * dpr; ui.canvas.height = s * dpr; ctx.setTransform(dpr, 0, 0, dpr, 0, 0); draw(); }
+        function draw() {
+            const radius = ui.canvas.clientWidth / 2;
+            ctx.clearRect(0, 0, ui.canvas.clientWidth, ui.canvas.clientHeight);
+            
+            const computedStyle = getComputedStyle(document.documentElement);
+            const colors = {
+                bg: computedStyle.getPropertyValue('--timer-bg').trim(),
+                sector: computedStyle.getPropertyValue('--timer-sector').trim(),
+                marker: computedStyle.getPropertyValue('--timer-marker').trim(),
+                text: computedStyle.getPropertyValue('--timer-text').trim(),
+            };
+
+            drawBackground(radius, colors.bg);
+            
+            const remainingMs = getRemainingMs();
+            if (remainingMs > 0 && timerState.status !== 'finished') {
+                const progress = remainingMs / (CONFIG.MAX_MINUTES * 60 * 1000);
+                drawSector(ctx, radius, progress, colors.sector);
+            }
+            
+            drawMarkers(radius, colors);
+
+            if (completionMessage) {
+                drawCompletionMessage(radius, colors.text);
+            }
+        }
+        function drawBackground(radius, color) { ctx.fillStyle = color; ctx.beginPath(); ctx.arc(radius, radius, radius * 0.9, 0, TAU); ctx.fill(); }
+        
+        function darkenColor(hex, percent) {
+            if (!hex.startsWith('#')) return hex;
+            let r = parseInt(hex.substring(1, 3), 16);
+            let g = parseInt(hex.substring(3, 5), 16);
+            let b = parseInt(hex.substring(5, 7), 16);
+            r = Math.floor(r * (1 - percent / 100));
+            g = Math.floor(g * (1 - percent / 100));
+            b = Math.floor(b * (1 - percent / 100));
+            return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+        }
+
+        function drawSector(ctx, radius, progress, color) {
+            const startAngle = -Math.PI / 2;
+            const circleRadius = radius * 0.9;
+
+            ctx.save();
+            
+            const gradient = ctx.createRadialGradient(
+                radius, radius * 0.7, 0,
+                radius, radius, circleRadius * 1.5
+            );
+            gradient.addColorStop(0, color);
+            gradient.addColorStop(1, darkenColor(color, 50));
+
+            const endAngle = startAngle - (progress * TAU);
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(radius, radius);
+            ctx.arc(radius, radius, circleRadius, startAngle, endAngle, true);
+            ctx.closePath();
+            ctx.fill();
+
+            ctx.restore();
+        }
+
+        function drawMarkers(radius, colors) {
+            ctx.font = `${radius * 0.15}px 'Inter', sans-serif`;
+            ctx.fillStyle = colors.text;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i <= 60; i++) {
+                const angle = -(i / 60) * TAU - Math.PI / 2;
+                const isMajorTick = i % 5 === 0;
+                const tickStartRadius = radius * 0.98;
+                const tickLength = isMajorTick ? radius * 0.1 : radius * 0.05;
+                const tickEndRadius = tickStartRadius - tickLength;
+                ctx.strokeStyle = colors.marker;
+                ctx.lineWidth = isMajorTick ? 2 : 1;
+                ctx.beginPath();
+                ctx.moveTo(radius + Math.cos(angle) * tickEndRadius, radius + Math.sin(angle) * tickEndRadius);
+                ctx.lineTo(radius + Math.cos(angle) * tickStartRadius, radius + Math.sin(angle) * tickStartRadius);
+                ctx.stroke();
+                if (isMajorTick) {
+                    if (i === 60) continue;
+                    const textRadius = tickEndRadius - radius * 0.12;
+                    const text = i.toString();
+                    ctx.fillText(text, radius + Math.cos(angle) * textRadius, radius + Math.sin(angle) * textRadius);
+                }
+            }
+        }
+
+        function drawCompletionMessage(radius, textColor) {
+            const boxWidth = radius * 1.1;
+            const boxHeight = radius * 0.4;
+            const boxX = radius - boxWidth / 2;
+            const boxY = radius - boxHeight / 2;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+            ctx.beginPath();
+            ctx.roundRect(boxX, boxY, boxWidth, boxHeight, [10]);
+            ctx.fill();
+
+            ctx.fillStyle = textColor;
+            const fontSize = radius * 0.09;
+            ctx.font = `bold ${fontSize}px 'Inter', sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(completionMessage[0], radius, radius - fontSize * 0.8);
+            ctx.fillText(completionMessage[1], radius, radius + fontSize * 0.8);
+        }
+
+        // --- UI & INTERAKTION ---
+        function updateUI() { draw(); const isPaused = timerState.status === 'paused'; const isFinished = timerState.status === 'finished'; ui.startPauseBtn.textContent = isPaused || isFinished ? 'Start' : 'Pause'; ui.startPauseBtn.disabled = (isFinished || timerState.totalMs === 0) && !isPaused; ui.manualTimeInput.disabled = !isPaused; }
+        
+        function handlePointerInteraction(e) {
+            if (timerState.status === 'running') return;
+            e.preventDefault();
+            const rect = ui.canvas.getBoundingClientRect();
+            const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+            const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+            const dx = x - ui.canvas.clientWidth / 2;
+            const dy = y - ui.canvas.clientHeight / 2;
+            
+            const angle = (Math.atan2(dy, dx) + Math.PI / 2 + TAU) % TAU;
+            const ccwAngle = (TAU - angle) % TAU;
+            const minutes = Math.round((ccwAngle / TAU) * CONFIG.MAX_MINUTES);
+            
+            setDuration(minutes);
+        }
+        
+        // --- BENACHRICHTIGUNGEN, FARBEN & EXTRAS ---
+        function triggerNotifications() {
+            if (appState.settings.sound) playSound();
+            if (appState.settings.vibration) navigator.vibrate?.(CONFIG.END_VIBRATION_PATTERN);
+        }
+        
+        function playSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const playTone = (startTime) => {
+                    const oscillator = audioCtx.createOscillator();
+                    const gainNode = audioCtx.createGain();
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioCtx.destination);
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(880, startTime);
+                    gainNode.gain.setValueAtTime(0.5, startTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.15);
+                    oscillator.start(startTime);
+                    oscillator.stop(startTime + 0.15);
+                };
+                const now = audioCtx.currentTime;
+                playTone(now);
+                playTone(now + 0.25);
+                playTone(now + 0.5);
+            } catch (e) {
+                console.error("Audio failed:", e);
+            }
+        }
+
+        async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { console.error('Wake Lock failed:', err); } } }
+        async function releaseWakeLock() { if (wakeLock) await wakeLock.release().catch(() => {}); wakeLock = null; }
+        
+        function setSectorColor(color) {
+            document.documentElement.style.setProperty('--timer-sector', color);
+            localStorage.setItem('timerColor', color);
+            draw();
+        }
+
+        function populateColorPalette() {
+            ui.color.palette.innerHTML = '';
+            CONFIG.COLORS.forEach((color) => {
+                const swatch = document.createElement('button');
+                swatch.className = 'w-8 h-8 rounded-full border-2 border-transparent focus:border-blue-500';
+                swatch.style.backgroundColor = color;
+                swatch.setAttribute('aria-label', `Farbe ${color} wählen`);
+                swatch.addEventListener('click', () => {
+                    setSectorColor(color);
+                    ui.color.palette.classList.remove('is-open');
+                });
+                ui.color.palette.appendChild(swatch);
+            });
+        }
+        
+        function renderSettings() {
+            ui.settings.soundToggle.classList.toggle('is-active', appState.settings.sound);
+            ui.settings.vibrationToggle.classList.toggle('is-active', appState.settings.vibration);
+        }
+
+        // --- INITIALISIERUNG & EVENT LISTENERS ---
+        function init() {
+            ui.startPauseBtn.style.backgroundColor = SPECIAL_BLUE;
+
+            const savedColor = localStorage.getItem('timerColor');
+            setSectorColor(savedColor || RED_COLOR);
+            
+            populateColorPalette();
+
+            window.addEventListener('resize', resizeCanvas);
+            document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { tick(); if (timerState.status === 'running') requestWakeLock(); } });
+            ui.canvas.addEventListener('pointerdown', (e) => { isPointerDown = true; handlePointerInteraction(e); });
+            ui.canvas.addEventListener('pointerup', () => isPointerDown = false);
+            ui.canvas.addEventListener('pointerleave', () => isPointerDown = false);
+            ui.canvas.addEventListener('pointermove', (e) => { if(isPointerDown) handlePointerInteraction(e); });
+            ui.manualTimeInput.addEventListener('input', () => setDuration(parseInt(ui.manualTimeInput.value, 10) || 0));
+            ui.startPauseBtn.addEventListener('click', () => (timerState.status === 'running' ? pause() : start()));
+            ui.resetBtn.addEventListener('click', reset);
+            ui.color.pickerBtn.addEventListener('click', () => ui.color.palette.classList.toggle('is-open'));
+            
+            ui.settings.openBtn.addEventListener('click', () => {
+                ui.settings.modal.classList.remove('hidden');
+            });
+
+            ui.settings.closeBtn.addEventListener('click', () => {
+                ui.settings.modal.classList.add('hidden');
+            });
+
+            ui.settings.soundToggle.addEventListener('click', () => {
+                appState.settings.sound = !appState.settings.sound; 
+                renderSettings();
+            });
+
+            ui.settings.vibrationToggle.addEventListener('click', () => {
+                appState.settings.vibration = !appState.settings.vibration;
+                renderSettings();
+            });
+
+            resizeCanvas();
+            updateUI();
+            renderSettings();
+        }
+
+        init();
+    </script>
+</body>
+</html>
