@@ -56,36 +56,6 @@
             grid-template-columns: repeat(4, 1fr);
             gap: 0.5rem;
         }
-        
-        .modal-overlay {
-            background-color: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
-        }
-        .toggle-switch {
-            width: 52px;
-            height: 32px;
-            background-color: #4b5563; /* grauer Hintergrund */
-            border-radius: 9999px;
-            position: relative;
-            cursor: pointer;
-            transition: background-color 0.2s ease-in-out;
-        }
-        .toggle-switch-handle {
-            position: absolute;
-            top: 4px;
-            left: 4px;
-            width: 24px;
-            height: 24px;
-            background-color: white;
-            border-radius: 50%;
-            transition: transform 0.2s ease-in-out;
-        }
-        .toggle-switch.is-active {
-            background-color: #3b82f6; /* blauer Hintergrund */
-        }
-        .toggle-switch.is-active .toggle-switch-handle {
-            transform: translateX(20px);
-        }
     </style>
 </head>
 <body class="flex flex-col items-center justify-center p-4">
@@ -95,11 +65,9 @@
         
         <!-- Header für Icons -->
         <div class="flex justify-between items-center h-10">
-             <!-- Button für Einstellungen (links) -->
-            <button id="settings-btn" aria-label="Einstellungen öffnen" class="text-gray-400 hover:text-white w-10 h-10 flex items-center justify-center rounded-full">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
+             <!-- Button für Einstellungen (links), jetzt ein direkter Schalter -->
+            <button id="sound-toggle-btn" aria-label="Signalton ein/aus" class="text-gray-400 hover:text-white w-10 h-10 flex items-center justify-center rounded-full">
+                <!-- SVG wird dynamisch per JS eingefügt -->
             </button>
              <!-- Button für Farbauswahl (rechts) -->
              <div class="relative">
@@ -136,28 +104,7 @@
         </div>
     </div>
 
-    <!-- Einstellungs-Modal -->
-    <div id="settings-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 modal-overlay hidden">
-        <div class="w-full max-w-sm bg-gray-800 rounded-2xl shadow-2xl p-6 flex flex-col">
-            <h3 class="text-2xl font-bold mb-8 text-center">Einstellungen</h3>
-            <div class="space-y-6 flex-grow mb-8">
-                <div class="flex justify-between items-center">
-                    <span class="text-lg">Signalton</span>
-                    <div id="sound-toggle" class="toggle-switch">
-                        <div class="toggle-switch-handle"></div>
-                    </div>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-lg">Vibration</span>
-                    <div id="vibration-toggle" class="toggle-switch">
-                        <div class="toggle-switch-handle"></div>
-                    </div>
-                </div>
-            </div>
-            <button id="close-settings-btn" class="w-full py-3 text-lg font-bold bg-gray-600 hover:bg-gray-500 rounded-lg">Fertig</button>
-        </div>
-    </div>
-
+    <!-- Einstellungs-Modal wurde entfernt -->
 
     <script type="module">
         // --- KONSTANTEN & KONFIGURATION ---
@@ -168,6 +115,14 @@
             MAX_MINUTES: 60,
             END_VIBRATION_PATTERN: [150, 100, 150, 100, 150],
             COLORS: [RED_COLOR, '#f4a261', '#eab308', '#a7c957', '#60a5fa', '#c4b5fd', '#f9a8d4'],
+        };
+        // **ANGEPASST: SVG-Icons für den Ton-Schalter**
+        const ICONS = {
+            soundOn: `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg>`,
+            soundOff: `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4l16 16" />
+                      </svg>`
         };
 
         // --- DOM-ELEMENTE ---
@@ -180,13 +135,7 @@
                 pickerBtn: document.getElementById('color-picker-btn'),
                 palette: document.getElementById('color-palette'),
             },
-            settings: {
-                modal: document.getElementById('settings-modal'),
-                openBtn: document.getElementById('settings-btn'),
-                closeBtn: document.getElementById('close-settings-btn'),
-                soundToggle: document.getElementById('sound-toggle'),
-                vibrationToggle: document.getElementById('vibration-toggle'),
-            }
+            soundToggleBtn: document.getElementById('sound-toggle-btn'),
         };
         const ctx = ui.canvas.getContext('2d');
 
@@ -195,24 +144,20 @@
         let appState = {
             settings: {
                 sound: true,
-                vibration: true
             }
         };
         let tickTimeout = null;
         let wakeLock = null;
         let isPointerDown = false;
         let completionMessage = null;
-        let audioCtx = null; // **NEU: AudioContext global deklarieren**
+        let audioCtx = null;
 
         // --- KERNLOGIK: TIMER & SCHEDULER ---
         function getRemainingMs() { return Math.max(0, timerState.totalMs - (timerState.status === 'running' ? (timerState.elapsedMsBeforePause + (Date.now() - timerState.startTimestamp)) : timerState.elapsedMsBeforePause)); }
         function scheduleNextTick() { clearTimeout(tickTimeout); if (timerState.status !== 'running') return; const r = getRemainingMs(); if (r <= 0) { finish(); return; } tickTimeout = setTimeout(tick, (r % 1000) || 1000); }
         function tick() { updateUI(); scheduleNextTick(); }
         
-        function start() {
-            if (timerState.totalMs <= timerState.elapsedMsBeforePause) return;
-            
-            // **NEU: AudioContext beim ersten Start durch Nutzeraktion initialisieren**
+        function initAudioContext() {
             if (!audioCtx && appState.settings.sound) {
                 try {
                     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -220,7 +165,11 @@
                     console.error("Web Audio API is not supported in this browser.");
                 }
             }
+        }
 
+        function start() {
+            if (timerState.totalMs <= timerState.elapsedMsBeforePause) return;
+            initAudioContext(); // Audio beim Start freischalten
             timerState.status = 'running';
             timerState.startTimestamp = Date.now();
             tick();
@@ -407,17 +356,14 @@
         // --- BENACHRICHTIGUNGEN, FARBEN & EXTRAS ---
         function triggerNotifications() {
             if (appState.settings.sound) playSound();
-            if (appState.settings.vibration) navigator.vibrate?.(CONFIG.END_VIBRATION_PATTERN);
         }
         
-        // **ANGEPASST: Verwendet den globalen AudioContext**
         function playSound() {
             if (!audioCtx) {
-                console.error("AudioContext not initialized by user gesture.");
+                console.error("AudioContext not initialized. Please click 'Start' first.");
                 return;
             }
             try {
-                // Stellt sicher, dass der Kontext aktiv ist (wichtig für einige Browser)
                 if (audioCtx.state === 'suspended') {
                     audioCtx.resume();
                 }
@@ -429,22 +375,22 @@
                     gainNode.connect(audioCtx.destination);
                     oscillator.type = 'sine';
                     oscillator.frequency.setValueAtTime(880, startTime);
-                    gainNode.gain.setValueAtTime(0.5, startTime);
-                    gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.15);
+                    gainNode.gain.setValueAtTime(1.0, startTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.2);
                     oscillator.start(startTime);
-                    oscillator.stop(startTime + 0.15);
+                    oscillator.stop(startTime + 0.2);
                 };
                 const now = audioCtx.currentTime;
                 playTone(now);
                 playTone(now + 0.25);
                 playTone(now + 0.5);
             } catch (e) {
-                console.error("Audio failed:", e);
+                console.error("Audio playback failed:", e);
             }
         }
 
-        async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); console.log('Screen Wake Lock is active.'); } catch (err) { console.error('Wake Lock failed:', err); } } }
-        async function releaseWakeLock() { if (wakeLock) { await wakeLock.release().catch(() => {}); wakeLock = null; console.log('Screen Wake Lock released.'); } }
+        async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { console.error('Wake Lock failed:', err); } } }
+        async function releaseWakeLock() { if (wakeLock) { await wakeLock.release().catch(() => {}); wakeLock = null; } }
         
         function setSectorColor(color) {
             document.documentElement.style.setProperty('--timer-sector', color);
@@ -467,9 +413,8 @@
             });
         }
         
-        function renderSettings() {
-            ui.settings.soundToggle.classList.toggle('is-active', appState.settings.sound);
-            ui.settings.vibrationToggle.classList.toggle('is-active', appState.settings.vibration);
+        function renderSoundToggleIcon() {
+            ui.soundToggleBtn.innerHTML = appState.settings.sound ? ICONS.soundOn : ICONS.soundOff;
         }
 
         // --- INITIALISIERUNG & EVENT LISTENERS ---
@@ -492,27 +437,15 @@
             ui.resetBtn.addEventListener('click', reset);
             ui.color.pickerBtn.addEventListener('click', () => ui.color.palette.classList.toggle('is-open'));
             
-            ui.settings.openBtn.addEventListener('click', () => {
-                ui.settings.modal.classList.remove('hidden');
-            });
-
-            ui.settings.closeBtn.addEventListener('click', () => {
-                ui.settings.modal.classList.add('hidden');
-            });
-
-            ui.settings.soundToggle.addEventListener('click', () => {
-                appState.settings.sound = !appState.settings.sound; 
-                renderSettings();
-            });
-
-            ui.settings.vibrationToggle.addEventListener('click', () => {
-                appState.settings.vibration = !appState.settings.vibration;
-                renderSettings();
+            ui.soundToggleBtn.addEventListener('click', () => {
+                appState.settings.sound = !appState.settings.sound;
+                initAudioContext(); // Audio freischalten, falls noch nicht geschehen
+                renderSoundToggleIcon();
             });
 
             resizeCanvas();
             updateUI();
-            renderSettings();
+            renderSoundToggleIcon(); // Initiales Icon setzen
         }
 
         init();
