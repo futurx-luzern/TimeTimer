@@ -202,13 +202,40 @@
         let wakeLock = null;
         let isPointerDown = false;
         let completionMessage = null;
+        let audioCtx = null; // **NEU: AudioContext global deklarieren**
 
         // --- KERNLOGIK: TIMER & SCHEDULER ---
         function getRemainingMs() { return Math.max(0, timerState.totalMs - (timerState.status === 'running' ? (timerState.elapsedMsBeforePause + (Date.now() - timerState.startTimestamp)) : timerState.elapsedMsBeforePause)); }
         function scheduleNextTick() { clearTimeout(tickTimeout); if (timerState.status !== 'running') return; const r = getRemainingMs(); if (r <= 0) { finish(); return; } tickTimeout = setTimeout(tick, (r % 1000) || 1000); }
         function tick() { updateUI(); scheduleNextTick(); }
-        function start() { if (timerState.totalMs <= timerState.elapsedMsBeforePause) return; timerState.status = 'running'; timerState.startTimestamp = Date.now(); tick(); updateUI(); requestWakeLock(); }
-        function pause() { timerState.elapsedMsBeforePause += Date.now() - timerState.startTimestamp; timerState.status = 'paused'; clearTimeout(tickTimeout); updateUI(); releaseWakeLock(); }
+        
+        function start() {
+            if (timerState.totalMs <= timerState.elapsedMsBeforePause) return;
+            
+            // **NEU: AudioContext beim ersten Start durch Nutzeraktion initialisieren**
+            if (!audioCtx && appState.settings.sound) {
+                try {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                } catch (e) {
+                    console.error("Web Audio API is not supported in this browser.");
+                }
+            }
+
+            timerState.status = 'running';
+            timerState.startTimestamp = Date.now();
+            tick();
+            updateUI();
+            requestWakeLock();
+        }
+
+        function pause() {
+            if (timerState.status !== 'running') return;
+            timerState.elapsedMsBeforePause += Date.now() - timerState.startTimestamp;
+            timerState.status = 'paused';
+            clearTimeout(tickTimeout);
+            updateUI();
+            releaseWakeLock();
+        }
         
         function reset() {
             completionMessage = null;
@@ -383,9 +410,18 @@
             if (appState.settings.vibration) navigator.vibrate?.(CONFIG.END_VIBRATION_PATTERN);
         }
         
+        // **ANGEPASST: Verwendet den globalen AudioContext**
         function playSound() {
+            if (!audioCtx) {
+                console.error("AudioContext not initialized by user gesture.");
+                return;
+            }
             try {
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                // Stellt sicher, dass der Kontext aktiv ist (wichtig für einige Browser)
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+
                 const playTone = (startTime) => {
                     const oscillator = audioCtx.createOscillator();
                     const gainNode = audioCtx.createGain();
@@ -407,8 +443,8 @@
             }
         }
 
-        async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); } catch (err) { console.error('Wake Lock failed:', err); } } }
-        async function releaseWakeLock() { if (wakeLock) await wakeLock.release().catch(() => {}); wakeLock = null; }
+        async function requestWakeLock() { if ('wakeLock' in navigator) { try { wakeLock = await navigator.wakeLock.request('screen'); console.log('Screen Wake Lock is active.'); } catch (err) { console.error('Wake Lock failed:', err); } } }
+        async function releaseWakeLock() { if (wakeLock) { await wakeLock.release().catch(() => {}); wakeLock = null; console.log('Screen Wake Lock released.'); } }
         
         function setSectorColor(color) {
             document.documentElement.style.setProperty('--timer-sector', color);
